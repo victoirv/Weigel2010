@@ -13,12 +13,12 @@ Na=0;
 Nb=36;
 
 
-[xnew,xnew2,corr,corr2,ca,ca2,cb,cb2,cc,cc2,casd,ca2sd,cbsd,cb2sd]=IRsortboot(Dst_index,VBS,Ion_density,Na,Nb);
+[xnew,xnew2,corr,corr2,ca,ca2,cb,cb2,cc,cc2,casd,ca2sd,cbsd,cb2sd]=IRsortboot(Dst_index,VBS,Ion_density,N,Na,Nb);
 
 
-figure; plot(flipud(cb)); hold on; plot(flipud(cb2),'r'); legend('Low Density','High Density','Location','SouthEast')
-plot(cb+2*cbsd,'b:');plot(cb-2*cbsd,'b:');
-plot(cb2+2*cb2sd,'r:');plot(cb2-2*cb2sd,'r:');
+figure; plot(fliplr(cb)); hold on; plot(fliplr(cb2),'r'); legend('Low Density','High Density','Location','SouthEast')
+plot(fliplr(cb+2*cbsd),'b:');plot(fliplr(cb-2*cbsd),'b:');
+plot(fliplr(cb2+2*cb2sd),'r:');plot(fliplr(cb2-2*cb2sd),'r:');
 ylabel('DST response to VBs')
 xlabel('Time Lags')
 title(sprintf('N:%d Nx:%d Nf:%d',N,Na,Nb))
