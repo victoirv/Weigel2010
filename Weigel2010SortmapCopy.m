@@ -1,4 +1,4 @@
-function deltas = Weigel2010Sortmap(x,f,sorter,N,numxcoef,numfcoef,lag, advance)
+function deltas = Weigel2010SortmapCopy(x,f,sorter,N,numxcoef,numfcoef,lag, advance)
 %Usage: [xnew, xnew2, corr, corr2, ca, ca2, cb, cb2, cc, cc2, casd,ca2sd,cbsd,cb2sd] = Weigel2010Sortmap(x,f,sorter,N,numxcoef,numfcoef,lag, advance)
 %Where ca are the x coefficients, cb the f coefficients
 %Allows for a matrix of impulses
@@ -43,7 +43,7 @@ numimpulses=min(size(f));
     
 Nsort=10;
     len=floor(length(x)-predstart-advance);
-    A=zeros(len,numxcoef+numfcoef*numimpulses+1); %+1 for mean-subtraction,
+    A=zeros(len,numxcoef+numfcoef*numimpulses+1+1); %+1 for mean-subtraction, +1 for sorter
         for i=1:numxcoef
         A(1:len,i)=x(xstart+i-1:xstart+i-1+len-1);
     end
@@ -53,17 +53,43 @@ Nsort=10;
         end
     end
     
-    A(:,end)=1;
-    b=x(predstart:predstart+len-1);
-    A=[A(1:end,:) b'];
-    
-    goodrows=find(~isnan(A*zeros(size(A,2),1)));
+    A(:,end-1)=1;
 
-    A=A(goodrows,:);
-    b=A(:,end);
-    A=A(:,1:end-1);
+deltas=zeros(Nsort,numfcoef-1+1);
+for sortwindow=1:Nsort
+for sortstart=0:numfcoef-sortwindow
+tic
+    %Add sorter. A=[xs... fs... 1 sort]
+    for i=1:len
+        A(i,end)=mean(sorter(fstart+i+sortstart:fstart+sortstart+sortwindow+i));
+    end
+
+    b=x(predstart:predstart+len-1);
+    A1=[A(1:end,:) b'];
     
-deltas=zeros(Nsort,numfcoef-1+1,2);
+    %A=[xs... fs... 1 sort b]
+    
+    for a=1:(numxcoef+numfcoef+1+1+1) %+1 for mean-normalization coef (cc, column of 1s), +1 for sorter, and +1 for column of 'b'
+        A1(isnan(A1(:,a)),:)=[];
+    end
+    
+    %Now separate into two parts via sortern (n for current iteration)
+    sortern=A1(:,end-1);
+    A2=A1;
+    split=mean(sortern);
+    A1(sortern>split,:)=[];
+    A2(sortern<=split,:)=[];
+    
+    
+    b=A1(:,end);
+    A1=A1(:,1:end-2);
+    b2=A2(:,end);
+    A2=A2(:,1:end-2);
+    
+    
+
+    
+    %Time to bootstrap
     cas=zeros(N,numxcoef);
     ca2s=cas;
     cbs=zeros(N,numfcoef);
@@ -71,92 +97,42 @@ deltas=zeros(Nsort,numfcoef-1+1,2);
     ccs=zeros(N,1);
     cc2s=zeros(N,1);
     
-    sortern=zeros(1,len);
-    
-disp('Going into loops')
-for sortwindow=1:Nsort
-for sortstart=0:numfcoef-sortwindow
-
-    %Add sorter. A=[xs... fs... 1 sort]
-    for i=1:len
-        sortern(i)=mean(sorter(fstart+i+sortstart:fstart+sortstart+sortwindow+i));
-    end
-
-    %time 0 is at numfcoef-advance, but sortstart starts at point furthest past
-    %so numfcoef-advance-(sortstart+sortwindow/2) is lags from 0
-    
-    
-    %A=[xs... fs... 1 sort b]
-    %{
-    for a=1:(numxcoef+numfcoef+1+1+1) %+1 for mean-normalization coef (cc, column of 1s), +1 for sorter, and +1 for column of 'b'
-        A1(isnan(A1(:,a)),:)=[];
-    end
-    %}
-    
-    %Now separate into two parts via sortern (n for current iteration)
-    %Make sorter only use good rows, same as A matrix
-    sortern=sortern(goodrows);
-    badsortrows=isnan(sortern);
-    split=mean(sortern(~badsortrows));
-    lowrows=sortern<=split;
-    highrows=sortern>split;
-    lowrows(badsortrows)=0;
-    highrows(badsortrows)=0;
-    %A1=A(sortern>split,:);
-    %A2=A(sortern<=split,:);
-    
-    
-    %b=A1(:,end);
-    %A1=A1(:,1:end-2);
-    %b2=A2(:,end);
-    %A2=A2(:,1:end-2);
-    
-    
-
-    
-    %Time to bootstrap
-
-    
-  
-    [ignore,lowrowx]=find(lowrows,len);
-    [ignore,highrowx]=find(highrows,len);
-    len1=length(lowrowx);
-    len2=length(highrowx);
-    
+    len1=size(A1,1);
+    len2=size(A2,1);
+    toc
     for n=1:N
-        rs=randsample(lowrowx,floor(len1/2));
-        rs2=randsample(highrowx,floor(len2/2));
-        %Asamp=A1(rs,:);
-        %A2samp=A2(rs2,:);
+        rs=randsample(len1,floor(len1/2));
+        rs2=randsample(len2,floor(len2/2));
+        Asamp=A1(rs,:);
+        A2samp=A2(rs2,:);
         
-        %coef=Asamp(1:end,:)\b(rs);
-        %coef2=A2samp(1:end,:)\b2(rs2);
-        coef=A(rs,:)\b(rs);
-        coef2=A(rs2,:)\b(rs2);
+        coef=Asamp(1:end,:)\b(rs);
+        coef2=A2samp(1:end,:)\b2(rs2);
         
         if(numxcoef>0)
-            cas(n,:)=coef(1:numxcoef);
-            ca2s(n,:)=coef2(1:numxcoef);
+            cas(n,:)=coef(1:numxcoef)';
+            ca2s(n,:)=coef2(1:numxcoef)';
         end
-        cbs(n,:)=coef(numxcoef+1:end-1);
+        cbs(n,:)=coef(numxcoef+1:end-1)';
         ccs(n)=coef(end);
         
-        cb2s(n,:)=coef2(numxcoef+1:end-1);
+        cb2s(n,:)=coef2(numxcoef+1:end-1)';
         cc2s(n)=coef2(end);
         
     end
     
     
-    %ca=mean(cas);
+    
+    ca=mean(cas);
     cb=mean(cbs);
-    %ca2=mean(ca2s);
+    ca2=mean(ca2s);
     cb2=mean(cb2s);
 
     
-    deltas(sortwindow,sortstart+1,:)=[numfcoef-advance-(sortstart+sortwindow/2) max(abs(cb2-cb))];
+    deltas(sortwindow,sortstart+1)=max(abs(cb2-cb));
     
 end
-fprintf('\n%d - ',sortwindow);
+fprintf('%d ',sortwindow);
 end
 
 %{
