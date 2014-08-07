@@ -44,7 +44,7 @@ numimpulses=min(size(f));
 Nsort=10;
     len=floor(length(x)-predstart-advance);
     A=zeros(len,numxcoef+numfcoef*numimpulses+1); %+1 for mean-subtraction,
-        for i=1:numxcoef
+    for i=1:numxcoef
         A(1:len,i)=x(xstart+i-1:xstart+i-1+len-1);
     end
     for i=1:numfcoef
@@ -63,7 +63,7 @@ Nsort=10;
     b=A(:,end);
     A=A(:,1:end-1);
     
-deltas=zeros(Nsort,numfcoef-1+1,2);
+deltas=zeros(Nsort,numfcoef-1+1,3);
     cas=zeros(N,numxcoef);
     ca2s=cas;
     cbs=zeros(N,numfcoef);
@@ -73,14 +73,23 @@ deltas=zeros(Nsort,numfcoef-1+1,2);
     
     sortern=zeros(1,len);
     
+    sorterm=zeros(Nsort,len+numfcoef);
+    for i=1:Nsort
+       sorterm(i,1:end-i)=sorter(fstart+i-1:fstart+i-1+len+numfcoef-1-i);
+    end
+    
 disp('Going into loops')
+
+
 for sortwindow=1:Nsort
 for sortstart=0:numfcoef-sortwindow
 
     %Add sorter. A=[xs... fs... 1 sort]
-    for i=1:len
-        sortern(i)=mean(sorter(fstart+i+sortstart:fstart+sortstart+sortwindow+i));
-    end
+    %for i=1:len
+        %sortern(i)=mean(sorter(fstart+i+sortstart:fstart+sortstart+sortwindow+i));
+    %end
+    sortern=mean(sorterm(1:sortwindow,1+sortstart:len+sortstart),1);
+    
 
     %time 0 is at numfcoef-advance, but sortstart starts at point furthest past
     %so numfcoef-advance-(sortstart+sortwindow/2) is lags from 0
@@ -98,6 +107,7 @@ for sortstart=0:numfcoef-sortwindow
     sortern=sortern(goodrows);
     badsortrows=isnan(sortern);
     split=mean(sortern(~badsortrows));
+    fprintf(' %2.1f ',split);
     lowrows=sortern<=split;
     highrows=sortern>split;
     lowrows(badsortrows)=0;
@@ -118,12 +128,14 @@ for sortstart=0:numfcoef-sortwindow
 
     
   
-    [ignore,lowrowx]=find(lowrows,len);
-    [ignore,highrowx]=find(highrows,len);
+    [~,lowrowx]=find(lowrows,len);
+    [~,highrowx]=find(highrows,len);
     len1=length(lowrowx);
     len2=length(highrowx);
     
     for n=1:N
+        %rs=randsample(lowrowx,floor(len1/2));
+        %rs2=randsample(highrowx,floor(len2/2));
         rs=randsample(lowrowx,floor(len1/2));
         rs2=randsample(highrowx,floor(len2/2));
         %Asamp=A1(rs,:);
@@ -152,11 +164,17 @@ for sortstart=0:numfcoef-sortwindow
     %ca2=mean(ca2s);
     cb2=mean(cb2s);
 
+    %Sortstart - sortstart+window, middle should be 
+    %Left: numcoef-advance-sortstart 
+    %Right: numcoef-advance-sortstart-(sortwindow-1) because the width of
+    %the window is actually sortwindow-1
+    deltas(sortwindow,sortstart+1,:)=[numfcoef-advance-sortstart-(sortwindow-1)/2, sortwindow, sum(cb2)-sum(cb)];
+    %deltas(sortwindow,sortstart+1,:)=[numfcoef-advance-sortstart-(sortwindow-1)/2, sortwindow, max(abs(cb2-cb))];
     
-    deltas(sortwindow,sortstart+1,:)=[numfcoef-advance-(sortstart+sortwindow/2) max(abs(cb2-cb))];
-    
+    %Also return both IR coeffs
+    %Plot cb and cb2 every time
 end
-fprintf('\n%d - ',sortwindow);
+fprintf('\n%d - %d',sortwindow,split);
 end
 
 %{
